@@ -7,6 +7,9 @@ import re
 import warnings
 warnings.filterwarnings('ignore')
 
+# Import expanded hate speech indicators (610+ indicators across 16 categories)
+from indicators import HATE_SPEECH_INDICATORS, check_text_for_indicators
+
 # Set script directory
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -225,18 +228,101 @@ except Exception as e:
     print(f"News/KG Error: {e}")
 
 # ============================================================================
-# Block 5: Pre-Retrieval Analysis Function
+# Block 5: Pre-Retrieval Analysis Function (ENHANCED)
 # ============================================================================
 print("\n[Block 5] Defining Pre-Retrieval Analysis...")
 
-def pre_retrieval_analysis(text: str):
-    """Extracts named entities and potential neologisms from text."""
-    doc = nlp(text)
-    entities = [ent.text for ent in doc.ents]
-    neologisms = [token.text for token in doc if token.is_oov]
-    return {"entities": list(set(entities)), "neologisms": list(set(neologisms))}
+# Keywords for enhanced entity detection (groups often missed by spaCy NER)
+ENTITY_KEYWORDS = {
+    # Religious groups
+    "muslim", "muslims", "islam", "islamic", "hindu", "hindus", "christian", "christians",
+    "jew", "jews", "jewish", "sikh", "sikhs", "buddhist", "buddhists", "atheist", "atheists",
+    # Ethnic/racial groups
+    "asian", "asians", "african", "africans", "black", "blacks", "white", "whites",
+    "latino", "latina", "hispanic", "indian", "indians", "chinese", "arab", "arabs",
+    # Political groups
+    "liberal", "liberals", "conservative", "conservatives", "democrat", "democrats",
+    "republican", "republicans", "leftist", "rightist", "communist", "fascist",
+    "feminist", "feminists", "activist", "activists",
+    # Caste groups
+    "dalit", "dalits", "brahmin", "brahmins", "kshatriya", "vaishya", "shudra",
+    # LGBTQ+
+    "gay", "gays", "lesbian", "lesbians", "transgender", "trans", "queer", "lgbtq",
+    # Nationality
+    "american", "americans", "british", "pakistani", "bangladeshi", "chinese",
+    "immigrant", "immigrants", "refugee", "refugees", "migrant", "migrants"
+}
 
-print("Pre-retrieval analysis function defined.")
+# Coded terms and neologisms commonly used in hate speech
+CODED_TERMS = {
+    # Internet hate speech codes
+    "gloober", "zorp", "jogger", "dindu", "goy", "goyim", "globalist",
+    # Dog whistles
+    "thug", "urban", "welfare queen", "illegal", "anchor baby",
+    # Alt-right terminology  
+    "cuck", "soyboy", "npc", "simp", "beta", "redpill", "bluepill",
+    "chad", "incel", "mgtow", "thot", "roastie",
+    # Coded replacements (number substitutions)
+    "1488", "88", "14", "13/50", "despite",
+    # Other coded terms
+    "dindu nuffin", "we wuz", "kangz", "sheeit", "ooga booga"
+}
+
+def pre_retrieval_analysis(text: str):
+    """
+    Enhanced extraction of named entities and potential neologisms/coded terms.
+    
+    Improvements over basic version:
+    1. Keyword-based entity detection for groups often missed by spaCy NER
+    2. Custom coded term detection for hate speech dog whistles
+    3. Better handling of lowercase group names
+    """
+    doc = nlp(text)
+    text_lower = text.lower()
+    
+    # 1. Standard spaCy NER
+    spacy_entities = [ent.text for ent in doc.ents]
+    
+    # 2. Keyword-based entity detection (catches lowercase group names)
+    keyword_entities = []
+    for keyword in ENTITY_KEYWORDS:
+        if keyword in text_lower:
+            # Capitalize for consistency
+            keyword_entities.append(keyword.title())
+    
+    # 3. Combine and deduplicate entities
+    all_entities = list(set(spacy_entities + keyword_entities))
+    
+    # 4. Standard OOV neologism detection
+    oov_neologisms = [token.text for token in doc if token.is_oov and len(token.text) > 2]
+    
+    # 5. Custom coded term detection
+    coded_found = []
+    for term in CODED_TERMS:
+        if term in text_lower:
+            coded_found.append(term)
+    
+    # 6. Check for number-based codes (like 1488, 88)
+    import re as regex
+    number_codes = regex.findall(r'\b(1488|88|14|13\/50)\b', text)
+    coded_found.extend(number_codes)
+    
+    # 7. Combine neologisms
+    all_neologisms = list(set(oov_neologisms + coded_found))
+    
+    # 8. Also check indicators for any matching slurs/terms
+    indicator_matches = check_text_for_indicators(text)
+    
+    return {
+        "entities": all_entities,
+        "neologisms": all_neologisms,
+        "indicator_matches": indicator_matches,  # NEW: Categories matched
+        "entity_count": len(all_entities),
+        "neologism_count": len(all_neologisms)
+    }
+
+print("Enhanced pre-retrieval analysis function defined.")
+
 
 # ============================================================================
 # Block 6: RAG Core - Multi-Query Agent (if Google API available)
@@ -253,7 +339,7 @@ if has_openrouter_api and slur_lexicon_db:
         # Initialize OpenRouter client
         openrouter_client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
-            api_key="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",
+            api_key=OPENROUTER_API_KEY,
         )
         
         # Create wrapper function for LLM calls
@@ -495,19 +581,11 @@ Analysis Task: Based ONLY on the sentence and the provided context, classify the
     )
 
 def determine_sentence_type(sentence: str) -> str:
-    """Determines the potential hate speech category."""
+    """Determines the potential hate speech category using expanded 610+ indicators."""
     doc = nlp(sentence.lower())
     
-    indicators = {
-        "Caste-based hate": ["lower castes", "upper castes", "dalit", "brahmin", "caste"],
-        "Religion-based hate": ["muslim", "islam", "hindu", "christian", "jew", "sikh", "buddhist", "religion", "allah", "jesus", "mosque", "temple", "church"],
-        "Gender-based hate": ["women belong", "men are superior", "feminist", "sexist", "women", "men", "gender"],
-        "Political hate": ["political", "government", "traitor", "election", "congress", "regime"],
-        "Cyberbullying": ["online", "internet", "dox", "troll", "cyber", "twitter", "facebook"],
-        "Subtle hate": ["you know the type", "those kind", "just a joke", "can't take a joke"]
-    }
-    
-    for category, keywords in indicators.items():
+    # Use expanded indicators from indicators.py (610+ indicators across 16 categories)
+    for category, keywords in HATE_SPEECH_INDICATORS.items():
         if any(kw in doc.text for kw in keywords):
             return category
     
@@ -555,14 +633,18 @@ def analyze_sentence(sentence: str):
     print(f"ANALYZING: '{sentence}'")
     print("="*70)
     
-    # 1. Pre-Retrieval Analysis
+    # 1. Pre-Retrieval Analysis (ENHANCED)
     analysis = pre_retrieval_analysis(sentence)
-    print(f"\nEntities found: {analysis['entities']}")
-    print(f"Neologisms found: {analysis['neologisms']}")
+    print(f"\n[Pre-Retrieval Analysis]")
+    print(f"  Entities found ({analysis['entity_count']}): {analysis['entities']}")
+    print(f"  Neologisms/Coded terms ({analysis['neologism_count']}): {analysis['neologisms']}")
+    if analysis['indicator_matches']:
+        print(f"  Indicator matches: {analysis['indicator_matches']}")
     
     # 2. Sentence Type
     expert_type = determine_sentence_type(sentence)
-    print(f"Sentence category: {expert_type}")
+    print(f"\n[Category Detection]")
+    print(f"  Hate speech category: {expert_type}")
     
     # 3. ML Model Classification
     model_result = classify_hate_speech_combined(sentence)
