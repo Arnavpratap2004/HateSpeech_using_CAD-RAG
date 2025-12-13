@@ -1,9 +1,9 @@
 .env
 __pycache__/
-*.pkl
-cad_rag_chroma/
-*.ipynb_checkpoints/
-_legacy/
-traintest.csv
-train.csv
-# Keep only source code and clean notebooks
+*.pyc
+.ipynb_checkpoints/
+models/*.pkl
+vector_store/
+
+# Keep data out of git if large, or explicitly ignore raw data
+data/raw/
