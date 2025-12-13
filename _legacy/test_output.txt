@@ -1,0 +1,141 @@
+﻿============================================================
+CAD-RAG Local Test - ML Model Training and Evaluation
+============================================================
+
+Loading training data from: C:\Users\Arnav\Desktop\CAD-RAG\train.csv
+Training data loaded successfully. Shape: (26000, 8)
+
+Columns in training data: ['id', 'comment_text', 'toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
+
+First few rows of training data:
+                 id  ... identity_hate
+0  6a6b16e9d691ee36  ...             1
+1  cc6bd1028000c426  ...             0
+2  433734a004b87cfe  ...             0
+3  6b7fb1101e46a86e  ...             0
+4  db82c5ce347be106  ...             0
+
+[5 rows x 8 columns]
+
+WARNING: Missing columns: ['tweet', 'hate_speech', 'offensive_language', 'neither']
+Available columns: ['id', 'comment_text', 'toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
+Using 'comment_text' as 'tweet'
+Potential label columns: ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
+
+Binarizing label columns for training data...
+Binarization complete.
+
+Starting text cleaning and preprocessing...
+Text cleaning completed.
+
+Training data prepared:
+  - Number of samples: 26000
+  - Number of labels: 0
+
+Initializing TF-IDF Vectorizer (max_features=10000)...
+TF-IDF matrix shape: (26000, 10000)
+
+Initializing Logistic Regression model with class_weight='balanced'...
+Training the Logistic Regression model...
+py : Traceback (most 
+recent call last):
+At line:1 char:1
++ py 
+run_local_test.py 
+2>&1 | Out-File 
+-FilePath 
+test_output.txt 
+-Encod ...
++ ~~~~~~~~~~~~~~~~~~~
+~~~~~~
+    + CategoryInfo   
+           : NotSpe  
+  cified: (Traceba   
+ ck (most recent     
+call last)::Stri    
+ng) [], RemoteEx    
+ception
+    + FullyQualified 
+   ErrorId : Native  
+  CommandError
+ 
+  File "C:\Users\Arna
+v\Desktop\CAD-RAG\run
+_local_test.py", 
+line 111, in <module>
+    logistic_regressi
+on_model.fit(X_train_
+tfidf, y_train)
+    ~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~^^^^^^^^^
+^^^^^^^^^^^^^^^
+  File "C:\Users\Arna
+v\AppData\Local\Progr
+ams\Python\Python313\
+Lib\site-packages\skl
+earn\multioutput.py",
+ line 543, in fit
+    super().fit(X, 
+Y, sample_weight=samp
+le_weight, 
+**fit_params)
+    ~~~~~~~~~~~^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
+^
+  File "C:\Users\Arna
+v\AppData\Local\Progr
+ams\Python\Python313\
+Lib\site-packages\skl
+earn\base.py", line 
+1336, in wrapper
+    return fit_method
+(estimator, *args, 
+**kwargs)
+  File "C:\Users\Arna
+v\AppData\Local\Progr
+ams\Python\Python313\
+Lib\site-packages\skl
+earn\multioutput.py",
+ line 242, in fit
+    y = 
+validate_data(self, 
+X="no_validation", 
+y=y, 
+multi_output=True)
+  File "C:\Users\Arna
+v\AppData\Local\Progr
+ams\Python\Python313\
+Lib\site-packages\skl
+earn\utils\validation
+.py", line 2904, in 
+validate_data
+    out = 
+_check_y(y, 
+**check_params)
+  File "C:\Users\Arna
+v\AppData\Local\Progr
+ams\Python\Python313\
+Lib\site-packages\skl
+earn\utils\validation
+.py", line 1341, in 
+_check_y
+    y = check_array(
+        y,
+    ...<5 lines>...
+        
+estimator=estimator,
+    )
+  File "C:\Users\Arna
+v\AppData\Local\Progr
+ams\Python\Python313\
+Lib\site-packages\skl
+earn\utils\validation
+.py", line 898, in 
+check_array
+    dtype_orig = np.r
+esult_type(*dtypes_or
+ig)
+ValueError: at least 
+one array or dtype 
+is required
