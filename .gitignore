@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pkl
+cad_rag_chroma/
+*.ipynb_checkpoints/
+_legacy/
+traintest.csv
+train.csv
+# Keep only source code and clean notebooks
