@@ -60,10 +60,12 @@ The CAD-RAG framework dynamically retrieves relevant documents (definitions, exa
 | Component | Description |
 |-----------|-------------|
 | **Pre-Retrieval** | Named Entity Recognition (NER) and Neologism detection using spaCy |
-| **ML Classifier** | TF-IDF + Logistic Regression for initial toxicity scoring |
+| **ML Classifier** | TF-IDF + Logistic Regression for initial toxicity scoring (conservative risk signal, not final verdict) |
 | **Vector Store** | ChromaDB with HuggingFace embeddings for semantic retrieval |
 | **Knowledge Bases** | Evolving Slur Lexicon and Reclaimed Speech Corpus |
-| **LLM Reasoning** | OpenRouter API (Hermes 3) for context-aware final classification |
+| **LLM Reasoning** | OpenRouter API (Hermes 3) for context-aware final classification (authoritative decision) |
+
+> **Note:** Pre-retrieval lexical analysis serves as a conservative risk signal to guide retrieval strategy, not as a definitive classification. The LLM reasoning stage, augmented with retrieved contextual evidence, holds final authority over the classification outcome.
 
 ---
 
@@ -112,6 +114,20 @@ The LLM synthesizes ML predictions with retrieved context to produce:
 - Multi-label toxicity scores
 - Explainable rationale
 
+### 6. Conflict Resolution Between Pre-Retrieval and LLM Reasoning
+
+A core design principle of CAD-RAG is the intentional separation between pre-retrieval lexical analysis and final LLM-based classification. These stages may produce conflicting signals, which is expected behavior rather than a system error.
+
+**Resolution Mechanism:**
+
+- **Pre-retrieval analysis** (ML classifier + rule-based lexicon matching) operates conservatively, flagging potential hate speech based on surface-level patterns such as known slurs, high toxicity scores, or entity-based triggers.
+- **LLM reasoning with retrieved context** evaluates the flagged content against retrieved evidence—including news articles, reclaimed speech examples, historical usage patterns, and domain-specific definitions.
+- When the LLM determines that retrieved context provides sufficient evidence for reclassification (e.g., reclaimed language usage, satirical framing, or contextual disambiguation), the final classification may override the initial pre-retrieval signal.
+
+**Design Rationale:**
+
+This architecture directly addresses a primary limitation of static keyword-based systems: high false positive rates caused by contextual ambiguity. By treating pre-retrieval flags as risk signals rather than verdicts, CAD-RAG enables context-sensitive override decisions that reduce false positives while maintaining detection sensitivity. All override decisions are evidence-backed and accompanied by explicit reasoning in the output.
+
 ---
 
 ## Models & Tools
@@ -155,6 +171,8 @@ The LLM synthesizes ML predictions with retrieved context to produce:
 For each prediction, CAD-RAG provides:
 - **Retrieved contextual documents** supporting the decision
 - **Reasoning chain** explaining the classification
+
+**Override Decision Transparency:** When the final LLM classification differs from the pre-retrieval analysis, the system explicitly documents this override in the reasoning output. The explanation includes the specific retrieved evidence that justified the reclassification (e.g., reclaimed speech corpus matches, contextual disambiguation from news sources, or community-specific usage patterns). This transparency ensures that override decisions are auditable and grounded in retrieved evidence rather than arbitrary model behavior.
 
 ### Example
 
@@ -235,6 +253,7 @@ CAD-RAG/
 
 - **Dataset Bias**: Training data may reflect historical annotation biases.
 - **Misclassification Risk**: False positives can suppress legitimate speech; false negatives can allow harmful content.
+- **Contextual Override Accountability**: The system's ability to override pre-retrieval flags based on contextual evidence is designed to reduce false positives from static keyword matching; however, this mechanism requires careful monitoring to ensure override decisions remain evidence-based and do not inadvertently permit harmful content.
 - **Responsible Deployment**: Automated moderation should include human-in-the-loop review.
 - **Cultural Sensitivity**: Models trained on English may not generalize to other languages or cultures.
 
