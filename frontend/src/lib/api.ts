@@ -20,6 +20,12 @@ export interface AnalysisResponse {
     entities?: string[];
     neologisms?: string[];
     indicator_matches?: Record<string, string[]>;
+    // New CAD-RAG Final Decision fields
+    final_label?: "Hateful" | "Non-Hateful";
+    override_pre_analysis?: boolean;
+    final_justification?: string;
+    pre_label?: string;
+    pre_confidence?: number;
 }
 
 export interface HealthResponse {

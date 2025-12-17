@@ -300,6 +300,125 @@ Analysis Task: Based ONLY on the sentence and the provided context, classify the
         context_block=context_from_rag['output'] if isinstance(context_from_rag, dict) and 'output' in context_from_rag else context_from_rag
     )
 
+def create_final_decision_prompt(sentence: str, pre_label: str, pre_confidence: float, retrieved_context: str) -> str:
+    """
+    Create the Final CAD-RAG Decision Prompt for context-aware classification.
+    
+    Args:
+        sentence: The original user sentence
+        pre_label: Result from pre-retrieval analysis ("HATEFUL" or "NOT_HATEFUL")
+        pre_confidence: Confidence score from pre-retrieval (0-1)
+        retrieved_context: Context retrieved from RAG system
+    
+    Returns:
+        Formatted prompt for the LLM to make final classification
+    """
+    FINAL_DECISION_TEMPLATE = """You are an expert hate speech moderation model operating inside a
+Context-Aware Dynamic Retrieval-Augmented Generation (CAD-RAG) system.
+
+You are given:
+1. The original user sentence
+2. The output of a pre-retrieval lexical analysis (keyword/slur-based)
+3. Retrieved contextual evidence from trusted sources
+4. Your task is to make the FINAL classification decision
+
+IMPORTANT PRINCIPLES:
+- Pre-retrieval analysis is conservative and may produce false positives.
+- The final decision must prioritize contextual meaning, intent, and real-world usage.
+- Do NOT rely on keywords alone.
+- Only classify as HATEFUL if the intent is clearly harmful toward a protected group.
+- If the context neutralizes or explains the usage, override the pre-analysis.
+
+INPUT:
+Sentence:
+"{sentence}"
+
+Pre-Retrieval Analysis Result:
+Label: {pre_label}
+Confidence: {pre_confidence:.2f}
+
+Retrieved Context:
+{retrieved_context}
+
+TASKS:
+1. Analyze the sentence intent using the retrieved context.
+2. Decide whether the sentence is truly hateful or not.
+3. If your decision differs from pre-retrieval analysis, explicitly justify the override.
+4. Base your reasoning strictly on contextual evidence.
+
+OUTPUT FORMAT (STRICT):
+Final_Label: [Hateful | Non-Hateful]
+Override_PreAnalysis: [Yes | No]
+Justification:
+- One clear paragraph explaining the decision
+- Explicitly reference how context affects interpretation
+- Avoid vague statements
+
+REMEMBER:
+Context-aware reasoning is the primary authority in this system."""
+
+    return FINAL_DECISION_TEMPLATE.format(
+        sentence=sentence,
+        pre_label=pre_label,
+        pre_confidence=pre_confidence,
+        retrieved_context=retrieved_context if retrieved_context else "No context available"
+    )
+
+
+def parse_final_decision(llm_response: str) -> dict:
+    """
+    Parse the LLM response to extract final decision components.
+    
+    Args:
+        llm_response: Raw response from LLM
+    
+    Returns:
+        Dictionary with final_label, override_pre_analysis, and justification
+    """
+    result = {
+        "final_label": "Non-Hateful",
+        "override_pre_analysis": False,
+        "justification": ""
+    }
+    
+    if not llm_response:
+        return result
+    
+    lines = llm_response.strip().split('\n')
+    justification_lines = []
+    in_justification = False
+    
+    for line in lines:
+        line_lower = line.lower().strip()
+        
+        if 'final_label:' in line_lower or 'final label:' in line_lower:
+            if 'hateful' in line_lower and 'non-hateful' not in line_lower and 'non hateful' not in line_lower:
+                result['final_label'] = 'Hateful'
+            else:
+                result['final_label'] = 'Non-Hateful'
+                
+        elif 'override_preanalysis:' in line_lower or 'override preanalysis:' in line_lower or 'override_pre_analysis:' in line_lower:
+            result['override_pre_analysis'] = 'yes' in line_lower
+            
+        elif 'justification:' in line_lower:
+            in_justification = True
+            # Check if there's content after the colon on this line
+            parts = line.split(':', 1)
+            if len(parts) > 1 and parts[1].strip():
+                justification_lines.append(parts[1].strip())
+        elif in_justification:
+            # Skip bullet point markers but keep the content
+            clean_line = line.strip()
+            if clean_line.startswith('-'):
+                clean_line = clean_line[1:].strip()
+            if clean_line:
+                justification_lines.append(clean_line)
+    
+    result['justification'] = ' '.join(justification_lines).strip()
+    
+    return result
+
+
 def determine_sentence_type(sentence: str) -> str:
     doc = nlp(sentence.lower())
     for category, keywords in HATE_SPEECH_INDICATORS.items():
@@ -333,28 +452,57 @@ def classify_hate_speech_combined(sentence: str) -> dict:
 def analyze_sentence(sentence: str):
     print(f"\nAnalyzing: '{sentence}'")
     
-    # 1. Pre-Retrieval
+    # 1. Pre-Retrieval Analysis
     analysis = pre_retrieval_analysis(sentence)
     
     # 2. Type Detection
     expert_type = determine_sentence_type(sentence)
     
-    # 3. ML Model
+    # 3. ML Model (used as pre-retrieval baseline)
     model_result = classify_hate_speech_combined(sentence)
     
-    # 4. RAG
+    # Determine pre-retrieval label and confidence
+    pre_label = model_result.get('model_result', 'NOT_HATEFUL')
+    # Calculate confidence from probabilities
+    pre_confidence = 0.5
+    if model_result.get('probabilities'):
+        probs = [float(p) for p in model_result['probabilities'].values()]
+        pre_confidence = max(probs) if probs else 0.5
+    
+    # 4. RAG Context Retrieval
     retrieved_context = {"output": "RAG agent not available"}
+    rag_context_str = "No context available"
     if agent_executor:
         try:
             rag_output = agent_executor(analysis['entities'], analysis['neologisms'])
             retrieved_context = {"output": rag_output}
+            rag_context_str = rag_output
         except Exception as e:
             print(f"RAG Error: {e}")
     
-    # 5. LLM Rationale
+    # 5. Final Decision using CAD-RAG Decision Prompt
+    final_decision = {
+        "final_label": "Non-Hateful",
+        "override_pre_analysis": False,
+        "justification": "LLM not available for final decision"
+    }
     llm_rationale = "LLM not available"
+    
     if llm:
         try:
+            # Create and send the final decision prompt
+            final_prompt = create_final_decision_prompt(
+                sentence=sentence,
+                pre_label=pre_label,
+                pre_confidence=pre_confidence,
+                retrieved_context=rag_context_str
+            )
+            llm_response = llm(final_prompt)
+            
+            # Parse the LLM response
+            final_decision = parse_final_decision(llm_response)
+            
+            # Also generate legacy rationale for backward compatibility
             prompt = create_dynamic_prompt(sentence, retrieved_context, expert_type)
             llm_rationale = llm(prompt)
         except Exception as e:
@@ -362,7 +510,10 @@ def analyze_sentence(sentence: str):
             
     # Output to console
     print(f"  Category: {expert_type}")
-    print(f"  Model Result: {model_result['model_result']}")
+    print(f"  Pre-Analysis Label: {pre_label}")
+    print(f"  Final Label: {final_decision['final_label']}")
+    if final_decision['override_pre_analysis']:
+        print(f"  ⚠️ Pre-analysis OVERRIDDEN by context-aware reasoning")
     if model_result.get('model_labels'):
         print(f"  Labels: {model_result['model_labels']}")
     if str(retrieved_context['output']) != "No specific entities or neologisms found to query.":
@@ -372,8 +523,17 @@ def analyze_sentence(sentence: str):
         "sentence": sentence,
         "category": expert_type,
         "model_result": model_result,
-        "llm_rationale": llm_rationale
+        "llm_rationale": llm_rationale,
+        "rag_context": rag_context_str,
+        # New fields for final decision
+        "final_label": final_decision['final_label'],
+        "override_pre_analysis": final_decision['override_pre_analysis'],
+        "final_justification": final_decision['justification'],
+        # Pre-analysis info for reference
+        "pre_label": pre_label,
+        "pre_confidence": pre_confidence
     }
 
 if __name__ == "__main__":
     analyze_sentence("Test sentence")
+

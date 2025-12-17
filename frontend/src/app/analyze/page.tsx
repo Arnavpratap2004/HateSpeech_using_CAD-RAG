@@ -83,6 +83,14 @@ function AnalyzeContent() {
                 indicator_matches: isHateful ? {
                     "Religion-based hate": ["muslim"],
                 } : {},
+                // New CAD-RAG Final Decision fields
+                final_label: isHateful ? "Hateful" : "Non-Hateful",
+                override_pre_analysis: false,
+                final_justification: isHateful
+                    ? "The sentence explicitly calls for the removal of a religious group (Muslims) from the country, which constitutes hate speech targeting a protected group based on their religious identity. The retrieved context confirms this matches historical patterns of exclusionary and discriminatory rhetoric. No contextual evidence was found to neutralize or explain the usage in a non-hateful manner."
+                    : "The content does not contain any hateful language or discriminatory intent. No contextual evidence suggests harmful targeting of any protected group.",
+                pre_label: isHateful ? "HATEFUL" : "NOT_HATEFUL",
+                pre_confidence: isHateful ? 0.87 : 0.23,
             });
             setAnalysisStep(5);
             setError("Demo mode: Backend not connected");
@@ -236,8 +244,8 @@ function AnalyzeContent() {
                                                 key={tab.id}
                                                 onClick={() => setActiveTab(tab.id as typeof activeTab)}
                                                 className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${activeTab === tab.id
-                                                        ? "bg-blue-600 text-white"
-                                                        : "text-gray-400 hover:text-white hover:bg-gray-800"
+                                                    ? "bg-blue-600 text-white"
+                                                    : "text-gray-400 hover:text-white hover:bg-gray-800"
                                                     }`}
                                             >
                                                 <span>{tab.icon}</span>
@@ -256,10 +264,48 @@ function AnalyzeContent() {
                                                 exit={{ opacity: 0, x: -20 }}
                                                 className="space-y-6"
                                             >
-                                                {/* Prediction Card */}
+                                                {/* Final Decision Card - Context-Aware Result */}
+                                                {result.final_label && (
+                                                    <Card variant="gradient-border" className="relative overflow-hidden">
+                                                        <div className="flex items-center gap-3 mb-4">
+                                                            <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center">
+                                                                <span className="text-white text-lg">⚖️</span>
+                                                            </div>
+                                                            <div>
+                                                                <h3 className="text-lg font-semibold text-white">Final Decision</h3>
+                                                                <p className="text-xs text-gray-400">Context-aware classification</p>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className={`px-4 py-2 rounded-full font-bold text-sm ${result.final_label === "Hateful"
+                                                                    ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                                                                    : "bg-green-500/20 text-green-400 border border-green-500/30"
+                                                                    }`}>
+                                                                    {result.final_label === "Hateful" ? "⚠️ Hateful" : "✓ Non-Hateful"}
+                                                                </span>
+                                                                {result.override_pre_analysis && (
+                                                                    <span className="px-3 py-1 bg-amber-500/20 text-amber-400 text-xs font-medium rounded-full border border-amber-500/30">
+                                                                        Pre-analysis overridden
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setActiveTab("explanation")}
+                                                                className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 cursor-pointer relative z-10"
+                                                            >
+                                                                View justification →
+                                                            </button>
+                                                        </div>
+                                                    </Card>
+                                                )}
+
+                                                {/* Prediction Card (Pre-retrieval) */}
                                                 <Card variant="glass">
                                                     <div className="flex items-center justify-between mb-4">
-                                                        <h3 className="text-lg font-semibold text-white">Prediction</h3>
+                                                        <h3 className="text-lg font-semibold text-white">Pre-Analysis Prediction</h3>
                                                         <Badge type={getPredictionBadgeType(result.prediction)}>
                                                             {result.prediction === "HATEFUL" ? "⚠️ Hate Speech" : "✓ Neutral"}
                                                         </Badge>
@@ -316,6 +362,10 @@ function AnalyzeContent() {
                                                     llmRationale={result.llm_rationale}
                                                     indicatorMatches={result.indicator_matches}
                                                     entities={result.entities}
+                                                    finalLabel={result.final_label}
+                                                    overridePreAnalysis={result.override_pre_analysis}
+                                                    finalJustification={result.final_justification}
+                                                    preLabel={result.pre_label}
                                                 />
                                             </motion.div>
                                         )}

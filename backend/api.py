@@ -68,6 +68,12 @@ class AnalyzeResponse(BaseModel):
     entities: Optional[List[str]] = None
     neologisms: Optional[List[str]] = None
     indicator_matches: Optional[Dict[str, List[str]]] = None
+    # New CAD-RAG Final Decision fields
+    final_label: Optional[str] = None
+    override_pre_analysis: Optional[bool] = None
+    final_justification: Optional[str] = None
+    pre_label: Optional[str] = None
+    pre_confidence: Optional[float] = None
 
 
 class HealthResponse(BaseModel):
@@ -134,6 +140,9 @@ async def analyze_text(request: AnalyzeRequest):
             except Exception as e:
                 llm_rationale = f"LLM unavailable: {str(e)}"
         
+        # Get full analysis result from engine (includes final decision)
+        full_result = analyze_sentence(request.text)
+        
         return AnalyzeResponse(
             sentence=request.text,
             prediction=model_result.get('model_result', 'UNKNOWN'),
@@ -141,11 +150,17 @@ async def analyze_text(request: AnalyzeRequest):
             category=category,
             labels=model_result.get('model_labels', []),
             probabilities=probabilities,
-            rag_context=rag_context,
-            llm_rationale=llm_rationale,
+            rag_context=full_result.get('rag_context', rag_context),
+            llm_rationale=full_result.get('llm_rationale', llm_rationale),
             entities=analysis.get('entities', []),
             neologisms=analysis.get('neologisms', []),
-            indicator_matches=analysis.get('indicator_matches', {})
+            indicator_matches=analysis.get('indicator_matches', {}),
+            # New CAD-RAG Final Decision fields
+            final_label=full_result.get('final_label'),
+            override_pre_analysis=full_result.get('override_pre_analysis'),
+            final_justification=full_result.get('final_justification'),
+            pre_label=full_result.get('pre_label'),
+            pre_confidence=full_result.get('pre_confidence')
         )
         
     except Exception as e:

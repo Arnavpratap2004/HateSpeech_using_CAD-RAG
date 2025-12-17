@@ -15,6 +15,11 @@ interface ExplanationPanelProps {
     llmRationale?: string;
     indicatorMatches?: Record<string, string[]>;
     entities?: string[];
+    // New CAD-RAG Final Decision props
+    finalLabel?: string;
+    overridePreAnalysis?: boolean;
+    finalJustification?: string;
+    preLabel?: string;
 }
 
 export default function ExplanationPanel({
@@ -22,6 +27,10 @@ export default function ExplanationPanel({
     llmRationale,
     indicatorMatches,
     entities,
+    finalLabel,
+    overridePreAnalysis,
+    finalJustification,
+    preLabel,
 }: ExplanationPanelProps) {
     // Parse RAG context into evidence cards
     const parseEvidenceCards = (context: string): RAGEvidence[] => {
@@ -52,8 +61,78 @@ export default function ExplanationPanel({
 
     const evidenceCards = parseEvidenceCards(ragContext || "");
 
+    const getFinalLabelColor = (label?: string) => {
+        if (!label) return "gray";
+        return label === "Hateful" ? "red" : "green";
+    };
+
     return (
         <div className="space-y-6">
+            {/* Context-Aware Final Decision Section */}
+            {finalLabel && (
+                <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-3"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center">
+                            <span className="text-white text-lg">⚖️</span>
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold text-white">Context-Aware Decision</h2>
+                            <p className="text-sm text-gray-400">Final classification using retrieved evidence</p>
+                        </div>
+                    </div>
+
+                    <Card variant="glass" className="relative overflow-hidden">
+                        {/* Override Banner */}
+                        {overridePreAnalysis && (
+                            <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: "auto" }}
+                                className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center gap-3"
+                            >
+                                <span className="text-amber-400 text-xl">⚠️</span>
+                                <div>
+                                    <p className="text-amber-300 font-medium text-sm">Pre-Analysis Overridden</p>
+                                    <p className="text-amber-400/70 text-xs">
+                                        Context changed the classification from <span className="font-semibold">{preLabel}</span> to <span className="font-semibold">{finalLabel}</span>
+                                    </p>
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {/* Final Label Display */}
+                        <div className="flex items-center justify-between mb-4">
+                            <span className="text-gray-400 text-sm font-medium">Final Classification</span>
+                            <span className={`px-4 py-2 rounded-full font-bold text-sm ${finalLabel === "Hateful"
+                                    ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                                    : "bg-green-500/20 text-green-400 border border-green-500/30"
+                                }`}>
+                                {finalLabel === "Hateful" ? "⚠️ Hateful" : "✓ Non-Hateful"}
+                            </span>
+                        </div>
+
+                        {/* Justification */}
+                        {finalJustification && (
+                            <div className="mt-4 pt-4 border-t border-gray-700/50">
+                                <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Justification</p>
+                                <p className="text-gray-300 text-sm leading-relaxed">
+                                    {finalJustification}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Decorative gradient line */}
+                        <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r ${finalLabel === "Hateful"
+                                ? "from-transparent via-red-500/50 to-transparent"
+                                : "from-transparent via-green-500/50 to-transparent"
+                            }`} />
+                    </Card>
+                </motion.div>
+            )}
+
             {/* Section Header */}
             <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
